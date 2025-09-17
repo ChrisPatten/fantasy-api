@@ -56,14 +56,22 @@ class Settings(BaseSettings):
         if not items:
             items = [raw]
         for idx, item in enumerate(items, start=1):
+            entry = item
+            alias = None
+            if '@' in entry:
+                alias_candidate, remainder = entry.split('@', 1)
+                alias_candidate = alias_candidate.strip()
+                if alias_candidate:
+                    alias = alias_candidate
+                    entry = remainder.strip()
             # Allow either '|' or ':' between league and team keys
-            if '|' in item:
-                league_key, team_key = [s.strip() for s in item.split('|', 1)]
-            elif ':' in item:
-                league_key, team_key = [s.strip() for s in item.split(':', 1)]
+            if '|' in entry:
+                league_key, team_key = [s.strip() for s in entry.split('|', 1)]
+            elif ':' in entry:
+                league_key, team_key = [s.strip() for s in entry.split(':', 1)]
             else:
                 # Single token; treat as team_key only (derive league from team if possible)
-                league_key, team_key = "", item
+                league_key, team_key = "", entry
             # Derive league_key from team_key if not provided
             if not league_key and team_key:
                 m = re.match(r"^(\d+\.l\.\d+)\.t\.\d+$", team_key)
@@ -73,7 +81,7 @@ class Settings(BaseSettings):
                 pairs.append({
                     "league_key": league_key,
                     "team_key": team_key,
-                    "alias": f"fav{idx}",
+                    "alias": alias or f"fav{idx}",
                 })
         return pairs
 

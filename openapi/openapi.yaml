@@ -295,7 +295,10 @@ components:
       properties:
         league_key: { type: string, nullable: true }
         team_key: { type: string }
-        alias: { type: string, nullable: true }
+        alias:
+          type: string
+          nullable: true
+          description: "Optional alias derived from the configured FAVORITE_TEAMS entries (defaults to `fav{index}`)"
       required: [team_key]
     FavoritesResponse:
       type: object

@@ -72,10 +72,11 @@ When integrating assistants (e.g., ChatGPT Actions), always start the conversati
 - `PORT` (default `8000`)
 - `SERVER_URL` (optional) Absolute base URL for OpenAPI servers; set this when integrating with ChatGPT Actions so the schema contains a valid server URL.
 - Rate limit (optional): `RATE_LIMIT_PER_MIN` (60), `RATE_LIMIT_BURST` (10)
-- Favorites: `FAVORITE_TEAMS` semicolon-separated; each entry can be just `team_key` or `<league_key>|<team_key>`
+- Favorites: `FAVORITE_TEAMS` semicolon-separated; each entry can be just `team_key`, `<league_key>|<team_key>`, or `<alias>@<league_key>|<team_key>` (alias optional)
   - Examples:
     - `461.l.1323091.t.10;461.l.840347.t.9` (league inferred)
     - `461.l.1323091|461.l.1323091.t.10;461.l.840347|461.l.840347.t.9`
+    - `Sunday Squad@461.l.1323091|461.l.1323091.t.10` (custom alias returned from `/v1/favorites`)
 
 ## Portainer Deployment
 1. Open Portainer → Stacks → Add stack → paste `docker/portainer-stack.yaml`.
