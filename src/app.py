@@ -144,7 +144,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @app.get("/v1/favorites", response_model=FavoritesResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
     async def get_favorites():
         favs = settings.favorite_teams()
-        return {"favorites": [FavoriteTeam(**f) for f in favs]}
+        enriched = yahoo_client.enrich_favorites(settings, favs)
+        return {"favorites": [FavoriteTeam(**f) for f in enriched]}
 
     @app.get("/v1/auth/url", response_model=AuthUrlResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
     async def get_auth_url(

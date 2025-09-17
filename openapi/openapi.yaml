@@ -233,6 +233,7 @@ components:
             properties:
               league_id: { type: string }
               league_key: { type: string }
+              league_name: { type: string, nullable: true }
               teams:
                 type: array
                 items:
@@ -299,6 +300,8 @@ components:
           type: string
           nullable: true
           description: "Optional alias derived from the configured FAVORITE_TEAMS entries (defaults to `fav{index}`)"
+        team_name: { type: string, nullable: true }
+        league_name: { type: string, nullable: true }
       required: [team_key]
     FavoritesResponse:
       type: object

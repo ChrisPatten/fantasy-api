@@ -255,6 +255,14 @@ def list_teams(settings: Settings, season: Optional[int]) -> List[Dict[str, Any]
         lg = yfa.League(oauth, lid)
         meta = lg.league_settings() if hasattr(lg, "league_settings") else {"league_key": lid}
         league_key = meta.get("league_key", lid)
+        league_name = meta.get("name") or meta.get("league_name")
+        if not league_name and hasattr(lg, "metadata"):
+            try:
+                metadata = lg.metadata()
+                if isinstance(metadata, dict):
+                    league_name = metadata.get("name") or metadata.get("league_name")
+            except Exception:
+                league_name = None
         teams_raw = lg.teams()
         teams_list: List[Dict[str, Any]] = []
         # teams() returns dict keyed by team_key
@@ -267,9 +275,53 @@ def list_teams(settings: Settings, season: Optional[int]) -> List[Dict[str, Any]
         leagues.append({
             "league_id": str(lid),
             "league_key": str(league_key),
+            "league_name": league_name if league_name else None,
             "teams": teams_list,
         })
     return leagues
+
+
+def enrich_favorites(settings: Settings, favorites: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not favorites:
+        return []
+    try:
+        leagues = list_teams(settings, season=None)
+    except Exception as exc:  # pragma: no cover - defensive logging path
+        log.warning("favorites.enrichment_failed", error=str(exc))
+        return favorites
+
+    league_lookup: Dict[str, Dict[str, Any]] = {}
+    team_lookup: Dict[str, Dict[str, Any]] = {}
+    for league in leagues:
+        league_key = str(league.get("league_key")) if league.get("league_key") is not None else ""
+        league_lookup[league_key] = {
+            "league_key": league_key,
+            "league_name": league.get("league_name"),
+        }
+        for team in league.get("teams", []):
+            team_key = team.get("team_key")
+            if not team_key:
+                continue
+            team_lookup[str(team_key)] = {
+                "league_key": league_key,
+                "league_name": league.get("league_name"),
+                "team_name": team.get("team_name"),
+            }
+
+    enriched: List[Dict[str, Any]] = []
+    for fav in favorites:
+        entry = dict(fav)
+        info = team_lookup.get(entry.get("team_key"))
+        if info:
+            entry.setdefault("league_key", info.get("league_key"))
+            entry["team_name"] = info.get("team_name")
+            entry["league_name"] = info.get("league_name")
+        elif entry.get("league_key"):
+            league_info = league_lookup.get(str(entry["league_key"]))
+            if league_info:
+                entry["league_name"] = league_info.get("league_name")
+        enriched.append(entry)
+    return enriched
 
 
 def get_roster(settings: Settings, team_key: str, week: Optional[int]) -> Dict[str, Any]:

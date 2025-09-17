@@ -54,7 +54,7 @@ ENV_FILE=.env make docker-run
 - `GET /v1/teams?nfl_season={int?}` – leagues and teams
 - `GET /v1/roster?team_key={string}&week={int?}` – roster
 - `GET /v1/waivers?team_key={string}[&league_key={string}]` – waiver settings, priority, pending claims (league_key optional; derived from team_key)
-- `GET /v1/favorites` – configured favorite league/team pairs from env
+- `GET /v1/favorites` – configured favorite league/team pairs from env (enriched with league/team names when available)
 - `GET /v1/auth/url` – Yahoo OAuth authorization link
 - `POST /v1/auth/token` – exchange the pasted Yahoo code and persist tokens
 - Nice-to-have: `GET /version`, `GET /metrics` (guarded by API key)
@@ -72,7 +72,7 @@ When integrating assistants (e.g., ChatGPT Actions), always start the conversati
 - `PORT` (default `8000`)
 - `SERVER_URL` (optional) Absolute base URL for OpenAPI servers; set this when integrating with ChatGPT Actions so the schema contains a valid server URL.
 - Rate limit (optional): `RATE_LIMIT_PER_MIN` (60), `RATE_LIMIT_BURST` (10)
-- Favorites: `FAVORITE_TEAMS` semicolon-separated; each entry can be just `team_key`, `<league_key>|<team_key>`, or `<alias>@<league_key>|<team_key>` (alias optional)
+- Favorites: `FAVORITE_TEAMS` semicolon-separated; each entry can be just `team_key`, `<league_key>|<team_key>`, or `<alias>@<league_key>|<team_key>` (alias optional). `/v1/favorites` resolves league/team names automatically when credentials allow.
   - Examples:
     - `461.l.1323091.t.10;461.l.840347.t.9` (league inferred)
     - `461.l.1323091|461.l.1323091.t.10;461.l.840347|461.l.840347.t.9`

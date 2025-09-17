@@ -21,6 +21,7 @@ def client(settings: Settings, monkeypatch):
             {
                 "league_id": "12345",
                 "league_key": "423.l.12345",
+                "league_name": "League 12345",
                 "teams": [
                     {"team_key": "423.l.12345.t.1", "team_name": "Team One", "waiver_priority": 3},
                     {"team_key": "423.l.12345.t.7", "team_name": "Team Seven", "waiver_priority": 1},

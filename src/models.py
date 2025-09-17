@@ -21,6 +21,8 @@ class FavoriteTeam(BaseModel):
     league_key: str | None = None
     team_key: str
     alias: str | None = None
+    team_name: str | None = None
+    league_name: str | None = None
 
 
 class FavoritesResponse(BaseModel):
@@ -37,6 +39,7 @@ class LeagueTeam(BaseModel):
 class LeagueSummary(BaseModel):
     league_id: str
     league_key: str
+    league_name: str | None = None
     teams: List[LeagueTeam]
 
 
