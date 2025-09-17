@@ -1,0 +1,9 @@
+{
+  "access_token": "ACCESS_TOKEN_SAMPLE",
+  "refresh_token": "REFRESH_TOKEN_SAMPLE",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "xoauth_yahoo_guid": "GUID12345",
+  "scope": "fspt-r fspt-w",
+  "id_token": "ID_TOKEN_SAMPLE"
+}

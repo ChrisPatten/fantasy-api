@@ -50,10 +50,28 @@ def client(settings: Settings, monkeypatch):
             ],
         }
 
+    def fake_build_auth_url(settings, state=None, redirect_uri=None):
+        return {
+            "authorization_url": "https://login.yahoo.com/authorize?foo=bar",
+            "redirect_uri": redirect_uri or "oob",
+            "state": state,
+        }
+
+    def fake_exchange_auth_code(settings, *, code, redirect_uri=None, state=None):
+        assert code == "test-code"
+        return {
+            "status": "stored",
+            "token_type": "bearer",
+            "guid": "guid123",
+            "scope": "fspt-r",
+            "expires_at": "2024-01-01T00:00:00+00:00",
+        }
+
     monkeypatch.setattr(yahoo_client, "list_teams", fake_list)
     monkeypatch.setattr(yahoo_client, "get_roster", fake_roster)
     monkeypatch.setattr(yahoo_client, "get_waivers", fake_waivers)
+    monkeypatch.setattr(yahoo_client, "build_authorization_url", fake_build_auth_url)
+    monkeypatch.setattr(yahoo_client, "exchange_authorization_code", fake_exchange_auth_code)
 
     app = create_app(settings)
     return TestClient(app)
-

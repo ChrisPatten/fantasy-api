@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import AnyHttpUrl, BaseModel, Field
 
 
 class Error(BaseModel):
@@ -81,3 +83,24 @@ class WaiversResponse(BaseModel):
     settings: WaiverSettings
     priority: List[WaiverPriorityItem]
     pending: List[WaiverClaim]
+
+
+# OAuth flow
+class AuthUrlResponse(BaseModel):
+    authorization_url: AnyHttpUrl
+    redirect_uri: str
+    state: Optional[str] = None
+
+
+class AuthCodeRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+    redirect_uri: Optional[str] = None
+    state: Optional[str] = None
+
+
+class AuthCodeResponse(BaseModel):
+    status: str = Field(default="stored")
+    token_type: Optional[str] = None
+    guid: Optional[str] = None
+    scope: Optional[str] = None
+    expires_at: Optional[datetime] = None

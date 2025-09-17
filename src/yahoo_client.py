@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import base64
+import json
 import logging
+import os
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode
 
 import requests
 from yahoo_oauth import OAuth2
@@ -13,7 +21,194 @@ except Exception:  # pragma: no cover - library not available during some test r
 
 from .settings import Settings
 
+
+def _to_int_or_none(value: Any) -> Optional[int]:
+    try:
+        if value is None:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
 log = logging.getLogger(__name__)
+
+
+class YahooOAuthError(RuntimeError):
+    """Raised when there is an unrecoverable Yahoo OAuth error."""
+
+    def __init__(self, message: str, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _oauth_file_path(settings: Settings) -> Path:
+    return Path(settings.YAHOO_OAUTH_FILE)
+
+
+def _load_oauth_data(settings: Settings) -> Dict[str, Any]:
+    path = _oauth_file_path(settings)
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except json.JSONDecodeError as exc:
+        raise YahooOAuthError(f"Invalid JSON in OAuth file {path}", status_code=500) from exc
+
+
+def _write_oauth_data(settings: Settings, data: Dict[str, Any]) -> None:
+    path = _oauth_file_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix="oauth2_", suffix=".json", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(tmp_path, path)
+        try:
+            os.chmod(path, 0o600)
+        except PermissionError:
+            # Not fatal; continue with current permissions.
+            pass
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def _resolve_credentials(settings: Settings, data: Dict[str, Any]) -> Dict[str, str]:
+    consumer_key = settings.YAHOO_CONSUMER_KEY or data.get("consumer_key")
+    consumer_secret = settings.YAHOO_CONSUMER_SECRET or data.get("consumer_secret")
+    if not consumer_key or not consumer_secret:
+        raise YahooOAuthError("Yahoo consumer key/secret not configured", status_code=500)
+    redirect_uri = data.get("redirect_uri") or settings.YAHOO_REDIRECT_URI or "oob"
+    return {
+        "consumer_key": consumer_key,
+        "consumer_secret": consumer_secret,
+        "redirect_uri": redirect_uri,
+    }
+
+
+def _basic_auth_header(consumer_key: str, consumer_secret: str) -> str:
+    raw = f"{consumer_key}:{consumer_secret}".encode("utf-8")
+    return base64.b64encode(raw).decode("ascii")
+
+
+def build_authorization_url(settings: Settings, *, state: Optional[str] = None, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
+    """Return an authorization URL that the user can visit to start OAuth."""
+
+    data = _load_oauth_data(settings)
+    creds = _resolve_credentials(settings, data)
+    redirect = redirect_uri or creds["redirect_uri"]
+    params = {
+        "client_id": creds["consumer_key"],
+        "redirect_uri": redirect,
+        "response_type": "code",
+    }
+    if state:
+        params["state"] = state
+    url = "https://api.login.yahoo.com/oauth2/request_auth?" + urlencode(params)
+    return {
+        "authorization_url": url,
+        "redirect_uri": redirect,
+        "state": state,
+    }
+
+
+def exchange_authorization_code(
+    settings: Settings,
+    *,
+    code: str,
+    redirect_uri: Optional[str] = None,
+    state: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Exchange a user-provided authorization code for tokens and persist them."""
+
+    if not code.strip():
+        raise YahooOAuthError("Authorization code is required")
+
+    data = _load_oauth_data(settings)
+    creds = _resolve_credentials(settings, data)
+    redirect = redirect_uri or creds["redirect_uri"]
+
+    headers = {
+        "Authorization": f"Basic {_basic_auth_header(creds['consumer_key'], creds['consumer_secret'])}",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    payload = {
+        "code": code,
+        "redirect_uri": redirect,
+        "grant_type": "authorization_code",
+    }
+    try:
+        response = requests.post(
+            "https://api.login.yahoo.com/oauth2/get_token",
+            data=payload,
+            headers=headers,
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        log.error("oauth.exchange.network_error", error=str(exc))
+        raise YahooOAuthError("Failed to reach Yahoo OAuth service", status_code=502) from exc
+
+    if response.status_code >= 400:
+        log.warning(
+            "oauth.exchange.failed",
+            status=response.status_code,
+            body=response.text[:256],
+        )
+        raise YahooOAuthError("Yahoo rejected the authorization code", status_code=response.status_code)
+
+    try:
+        token_payload = response.json()
+    except ValueError as exc:
+        log.error("oauth.exchange.invalid_json", response_text=response.text[:256])
+        raise YahooOAuthError("Yahoo returned an invalid OAuth response", status_code=502) from exc
+
+    access_token = token_payload.get("access_token")
+    refresh_token = token_payload.get("refresh_token")
+    token_type = token_payload.get("token_type")
+    if not access_token or not refresh_token or not token_type:
+        raise YahooOAuthError("Yahoo did not provide required OAuth tokens", status_code=502)
+
+    token_time = time.time()
+    stored = dict(data)
+    stored.update(
+        {
+            "consumer_key": creds["consumer_key"],
+            "consumer_secret": creds["consumer_secret"],
+            "redirect_uri": redirect,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": token_type,
+            "token_time": token_time,
+        }
+    )
+
+    optional_keys = {
+        "expires_in": token_payload.get("expires_in"),
+        "scope": token_payload.get("scope"),
+        "guid": token_payload.get("xoauth_yahoo_guid"),
+        "id_token": token_payload.get("id_token"),
+        "state": state,
+    }
+    for key, value in optional_keys.items():
+        if value is not None:
+            stored[key] = value
+
+    _write_oauth_data(settings, stored)
+
+    expires_at = None
+    expires_in = token_payload.get("expires_in")
+    if isinstance(expires_in, (int, float)):
+        expires_at = datetime.fromtimestamp(token_time + float(expires_in), tz=timezone.utc)
+
+    return {
+        "status": "stored",
+        "token_type": stored.get("token_type"),
+        "guid": stored.get("guid"),
+        "scope": stored.get("scope"),
+        "expires_at": expires_at,
+    }
 
 
 def _get_oauth(settings: Settings) -> OAuth2:
@@ -67,7 +262,7 @@ def list_teams(settings: Settings, season: Optional[int]) -> List[Dict[str, Any]
             teams_list.append({
                 "team_key": tkey,
                 "team_name": tdata.get("name") or tdata.get("team_name") or "",
-                "waiver_priority": tdata.get("waiver_priority"),
+                "waiver_priority": _to_int_or_none(tdata.get("waiver_priority")),
             })
         leagues.append({
             "league_id": str(lid),

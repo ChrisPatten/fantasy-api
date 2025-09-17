@@ -13,7 +13,18 @@ from fastapi.responses import JSONResponse
 
 from . import yahoo_client
 from .deps import APIKeyChecker, RateLimiter, get_api_key_checker, get_rate_limiter, request_id_generator
-from .models import Error, Health, RosterResponse, TeamsResponse, WaiversResponse, FavoritesResponse, FavoriteTeam
+from .models import (
+    AuthCodeRequest,
+    AuthCodeResponse,
+    AuthUrlResponse,
+    Error,
+    FavoriteTeam,
+    FavoritesResponse,
+    Health,
+    RosterResponse,
+    TeamsResponse,
+    WaiversResponse,
+)
 from .settings import Settings, get_settings
 
 
@@ -32,7 +43,16 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or get_settings()
     _configure_logging(settings.LOG_LEVEL)
 
-    app = FastAPI(title="Fantasy NFL API", version="1.0.0", docs_url="/docs", openapi_url="/openapi.json")
+    servers = None
+    if settings.SERVER_URL:
+        servers = [{"url": settings.SERVER_URL}]
+    app = FastAPI(
+        title="Fantasy NFL API",
+        version="1.0.0",
+        docs_url="/docs",
+        openapi_url="/openapi.json",
+        servers=servers,
+    )
 
     # CORS
     app.add_middleware(
@@ -125,6 +145,34 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     async def get_favorites():
         favs = settings.favorite_teams()
         return {"favorites": [FavoriteTeam(**f) for f in favs]}
+
+    @app.get("/v1/auth/url", response_model=AuthUrlResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    async def get_auth_url(
+        state: Optional[str] = Query(default=None, min_length=1, max_length=255),
+        redirect_uri: Optional[str] = Query(default=None, max_length=2048),
+    ):
+        try:
+            return yahoo_client.build_authorization_url(settings, state=state, redirect_uri=redirect_uri)
+        except yahoo_client.YahooOAuthError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=Error(code="oauth_error", message=str(exc)).model_dump(),
+            ) from exc
+
+    @app.post("/v1/auth/token", response_model=AuthCodeResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    async def exchange_auth_code(payload: AuthCodeRequest):
+        try:
+            return yahoo_client.exchange_authorization_code(
+                settings,
+                code=payload.code,
+                redirect_uri=payload.redirect_uri,
+                state=payload.state,
+            )
+        except yahoo_client.YahooOAuthError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=Error(code="oauth_error", message=str(exc)).model_dump(),
+            ) from exc
 
     return app
 

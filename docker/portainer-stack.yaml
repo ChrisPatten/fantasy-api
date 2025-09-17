@@ -5,6 +5,8 @@ services:
     image: ghcr.io/${OWNER:-your-gh-username}/fantasy-api:latest
     environment:
       - YAHOO_OAUTH_FILE=/data/oauth2.json
+      # Set absolute server URL to satisfy clients that require it in OpenAPI (e.g., ChatGPT Actions)
+      # - SERVER_URL=https://fantasy-api.chrispatten.dev
       # - API_KEY=change-me
       # - CORS_ALLOW_ORIGINS=https://fantasy_api.chrispatten.dev
       - LOG_LEVEL=INFO
@@ -32,4 +34,3 @@ networks:
   internal:
     driver: bridge
     internal: true
-

@@ -2,21 +2,31 @@ from __future__ import annotations
 
 from functools import lru_cache
 import re
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     # Core config
     YAHOO_OAUTH_FILE: str = Field(default="/data/oauth2.json")
+    YAHOO_CONSUMER_KEY: Optional[str] = Field(default=None)
+    YAHOO_CONSUMER_SECRET: Optional[str] = Field(default=None)
+    YAHOO_REDIRECT_URI: str = Field(default="oob")
     API_KEY: str | None = Field(default=None)
     CORS_ALLOW_ORIGINS: str = Field(default="*")
     LOG_LEVEL: str = Field(default="INFO")
     PORT: int = Field(default=8000)
+    # Optional absolute base URL for OpenAPI servers (required by some clients like ChatGPT Actions)
+    SERVER_URL: str | None = Field(default=None)
 
     # Rate limiting (per-IP)
     RATE_LIMIT_PER_MIN: int = Field(default=60, description="Allowed steady-state requests per minute per IP")
