@@ -101,11 +101,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content=Error(code="error", message=str(detail)).model_dump())
 
     # Routes
-    @app.get("/health", response_model=Health)
+    @app.get("/health", response_model=Health, operation_id="getHealth")
     async def health() -> Health:
         return Health()
 
-    @app.get("/version")
+    @app.get("/version", operation_id="getVersion")
     async def version():
         return {
             "git_sha": os.environ.get("GIT_SHA", "dev"),
@@ -117,24 +117,39 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
         app.add_middleware(PrometheusMiddleware)
 
-        @app.get("/metrics", dependencies=[Depends(api_key_dep)])
+        @app.get("/metrics", dependencies=[Depends(api_key_dep)], operation_id="getMetrics")
         async def metrics(request: Request):
             return await handle_metrics(request)
     except Exception:
         # Metrics optional
         pass
 
-    @app.get("/v1/teams", response_model=TeamsResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    @app.get(
+        "/v1/teams",
+        response_model=TeamsResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="listTeams",
+    )
     async def get_teams(nfl_season: Optional[int] = Query(default=None, ge=2000, le=2100)):
         leagues = yahoo_client.list_teams(settings, nfl_season)
         return {"leagues": leagues}
 
-    @app.get("/v1/roster", response_model=RosterResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    @app.get(
+        "/v1/roster",
+        response_model=RosterResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="getRoster",
+    )
     async def get_roster(team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$")):
         result = yahoo_client.get_roster(settings, team_key)
         return result
 
-    @app.get("/v1/roster/analysis", response_model=RosterAnalysisResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    @app.get(
+        "/v1/roster/analysis",
+        response_model=RosterAnalysisResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="getRosterAnalysis",
+    )
     async def get_roster_analysis(team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$")):
         result = yahoo_client.get_roster_analysis(settings, team_key)
         return result
@@ -143,6 +158,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         "/v1/free-agents",
         response_model=FreeAgentsResponse,
         dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="getFreeAgents",
     )
     async def get_free_agents(
         team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$"),
@@ -157,7 +173,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         )
         return result
 
-    @app.get("/v1/waivers", response_model=WaiversResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    @app.get(
+        "/v1/waivers",
+        response_model=WaiversResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="getWaivers",
+    )
     async def get_waivers(
         team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$"),
         league_key: Optional[str] = Query(default=None, description="Optional; derived from team_key if omitted"),
@@ -166,13 +187,23 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         result = yahoo_client.get_waivers(settings, lk, team_key)
         return result
 
-    @app.get("/v1/favorites", response_model=FavoritesResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    @app.get(
+        "/v1/favorites",
+        response_model=FavoritesResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="getFavorites",
+    )
     async def get_favorites():
         favs = settings.favorite_teams()
         enriched = yahoo_client.enrich_favorites(settings, favs)
         return {"favorites": [FavoriteTeam(**f) for f in enriched]}
 
-    @app.get("/v1/auth/url", response_model=AuthUrlResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    @app.get(
+        "/v1/auth/url",
+        response_model=AuthUrlResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="getAuthUrl",
+    )
     async def get_auth_url(
         state: Optional[str] = Query(default=None, min_length=1, max_length=255),
         redirect_uri: Optional[str] = Query(default=None, max_length=2048),
@@ -185,7 +216,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 detail=Error(code="oauth_error", message=str(exc)).model_dump(),
             ) from exc
 
-    @app.post("/v1/auth/token", response_model=AuthCodeResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    @app.post(
+        "/v1/auth/token",
+        response_model=AuthCodeResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+        operation_id="exchangeAuthCode",
+    )
     async def exchange_auth_code(payload: AuthCodeRequest):
         try:
             return yahoo_client.exchange_authorization_code(
