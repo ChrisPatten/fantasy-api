@@ -1,0 +1,25 @@
+# Environment and secrets
+.env
+oauth2.json
+client_secret.json
+corp-bundle.pem
+
+# Python artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build / dist
+build/
+dist/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

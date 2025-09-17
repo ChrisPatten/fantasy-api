@@ -1,0 +1,30 @@
+{
+  "fantasy_content": {
+    "league": [
+      { "league_key": "423.l.12345" },
+      {
+        "transactions": {
+          "0": {
+            "transaction": {
+              "type": "waiver",
+              "faab_bid": "12",
+              "players": {
+                "0": {
+                  "player": [
+                    {"player_key": "nfl.p.123"},
+                    {"name": {"full": "Player C"}}
+                  ],
+                  "transaction_data": {
+                    "type": "add",
+                    "destination_team_key": "423.l.12345.t.7"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+

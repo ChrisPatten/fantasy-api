@@ -1,0 +1,14 @@
+.env
+oauth2.json
+.git
+.github
+tests/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swm
+*.swo
+*.DS_Store
+openapi/

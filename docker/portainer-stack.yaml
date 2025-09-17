@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  fantasy-api:
+    image: ghcr.io/${OWNER:-your-gh-username}/fantasy-api:latest
+    environment:
+      - YAHOO_OAUTH_FILE=/data/oauth2.json
+      # - API_KEY=change-me
+      # - CORS_ALLOW_ORIGINS=https://fantasy_api.chrispatten.dev
+      - LOG_LEVEL=INFO
+      - PORT=8000
+    volumes:
+      - type: bind
+        source: /path/on/host/oauth2.json
+        target: /data/oauth2.json
+        read_only: true
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        # Uncomment if using Traefik instead of Nginx Proxy Manager
+        # - traefik.enable=true
+        # - traefik.http.routers.fantasy_api.rule=Host(`fantasy_api.chrispatten.dev`)
+        # - traefik.http.routers.fantasy_api.entrypoints=websecure
+        # - traefik.http.routers.fantasy_api.tls.certresolver=letsencrypt
+        # - traefik.http.services.fantasy_api.loadbalancer.server.port=8000
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+

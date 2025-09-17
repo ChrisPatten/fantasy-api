@@ -1,0 +1,235 @@
+openapi: 3.0.3
+info:
+  title: Fantasy NFL API
+  version: 1.0.0
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              examples:
+                ok:
+                  value: { status: 'ok' }
+  /v1/teams:
+    get:
+      summary: List leagues and teams
+      operationId: listTeams
+      parameters:
+        - in: query
+          name: nfl_season
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
+          required: false
+          description: Optional NFL season year
+      responses:
+        '200':
+          description: Leagues and teams
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/roster:
+    get:
+      summary: Get current or week-specific roster
+      operationId: getRoster
+      parameters:
+        - in: query
+          name: team_key
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]+\.l\.[0-9]+\.t\.[0-9]+$'
+        - in: query
+          name: week
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 18 }
+      responses:
+        '200':
+          description: Roster
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/waivers:
+    get:
+      summary: Waiver settings, priorities, and pending claims
+      operationId: getWaivers
+      parameters:
+        - in: query
+          name: team_key
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]+\.l\.[0-9]+\.t\.[0-9]+$'
+        - in: query
+          name: league_key
+          required: false
+          description: Optional; derived from team_key when omitted
+          schema: { type: string }
+      responses:
+        '200':
+          description: Waivers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaiversResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/favorites:
+    get:
+      summary: Configured favorite league/team pairs
+      operationId: getFavorites
+      responses:
+        '200':
+          description: Favorites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoritesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+components:
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            unauthorized:
+              value: { code: 'unauthorized', message: 'Missing or invalid API key' }
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            validation:
+              value: { code: 'validation_error', message: 'Validation failed', details: [] }
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            rl:
+              value: { code: 'rate_limited', message: 'Too many requests' }
+  schemas:
+    Health:
+      type: object
+      properties:
+        status: { type: string, example: 'ok' }
+      required: [status]
+    Error:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: {}
+      required: [code, message]
+    TeamsResponse:
+      type: object
+      properties:
+        leagues:
+          type: array
+          items:
+            type: object
+            properties:
+              league_id: { type: string }
+              league_key: { type: string }
+              teams:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    team_key: { type: string }
+                    team_name: { type: string }
+                    waiver_priority: { type: integer, nullable: true }
+                  required: [team_key, team_name]
+            required: [league_id, league_key, teams]
+      required: [leagues]
+    RosterResponse:
+      type: object
+      properties:
+        team_key: { type: string }
+        week: { type: integer, nullable: true }
+        players:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              position: { type: string, nullable: true }
+              status: { type: string, nullable: true }
+            required: [name]
+      required: [team_key, players]
+    WaiversResponse:
+      type: object
+      properties:
+        settings:
+          type: object
+          properties:
+            waiver_type: { type: string, nullable: true }
+            waiver_rule: { type: string, nullable: true }
+            uses_faab: { type: boolean, nullable: true }
+            waiver_time: { type: integer, nullable: true }
+        priority:
+          type: array
+          items:
+            type: object
+            properties:
+              team_name: { type: string }
+              team_key: { type: string }
+              priority: { type: integer, nullable: true }
+            required: [team_name, team_key]
+        pending:
+          type: array
+          items:
+            type: object
+            properties:
+              player: { type: string }
+              action_type: { type: string }
+              source_team_key: { type: string, nullable: true }
+              destination_team_key: { type: string, nullable: true }
+              faab_bid: { type: number, format: float, nullable: true }
+            required: [player, action_type]
+      required: [settings, priority, pending]
+    FavoriteTeam:
+      type: object
+      properties:
+        league_key: { type: string, nullable: true }
+        team_key: { type: string }
+        alias: { type: string, nullable: true }
+      required: [team_key]
+    FavoritesResponse:
+      type: object
+      properties:
+        favorites:
+          type: array
+          items:
+            $ref: '#/components/schemas/FavoriteTeam'
+      required: [favorites]
