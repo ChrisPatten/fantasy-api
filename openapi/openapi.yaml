@@ -7,7 +7,8 @@ info:
     calling `/v1/teams` to list available leagues and teams instead of assuming favorites
     are configured.
 servers:
-  - url: /
+  - url: https://fantasy-api.chrispatten.dev
+    description: Production deployment
 security:
   - ApiKeyAuth: []
 paths:
