@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Optional
+from typing import Optional, List
 import logging
 
 import structlog
@@ -21,9 +21,11 @@ from .models import (
     FavoriteTeam,
     FavoritesResponse,
     Health,
+    RosterAnalysisResponse,
     RosterResponse,
     TeamsResponse,
     WaiversResponse,
+    FreeAgentsResponse,
 )
 from .settings import Settings, get_settings
 
@@ -128,8 +130,31 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return {"leagues": leagues}
 
     @app.get("/v1/roster", response_model=RosterResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
-    async def get_roster(team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$"), week: Optional[int] = Query(default=None, ge=1, le=18)):
-        result = yahoo_client.get_roster(settings, team_key, week)
+    async def get_roster(team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$")):
+        result = yahoo_client.get_roster(settings, team_key)
+        return result
+
+    @app.get("/v1/roster/analysis", response_model=RosterAnalysisResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])
+    async def get_roster_analysis(team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$")):
+        result = yahoo_client.get_roster_analysis(settings, team_key)
+        return result
+
+    @app.get(
+        "/v1/free-agents",
+        response_model=FreeAgentsResponse,
+        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
+    )
+    async def get_free_agents(
+        team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$"),
+        positions: Optional[List[str]] = Query(default=None),
+        limit: int = Query(default=5, ge=1, le=50),
+    ):
+        result = yahoo_client.get_free_agents(
+            settings,
+            team_key,
+            positions=positions,
+            per_position=limit,
+        )
         return result
 
     @app.get("/v1/waivers", response_model=WaiversResponse, dependencies=[Depends(rate_limiter), Depends(api_key_dep)])

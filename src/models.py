@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from datetime import datetime
 
@@ -51,13 +51,37 @@ class TeamsResponse(BaseModel):
 class Player(BaseModel):
     name: str
     position: Optional[str] = None
+    slot: Optional[str] = Field(default=None, description="Roster slot such as QB, WR, BN")
     status: Optional[str] = None
+    eligible_positions: List[str] = Field(default_factory=list)
+    player_id: Optional[int] = None
+    position_type: Optional[str] = None
 
 
 class RosterResponse(BaseModel):
     team_key: str
-    week: Optional[int] = None
     players: List[Player]
+
+
+class AvailablePlayer(BaseModel):
+    player_id: Optional[int] = None
+    name: str
+    eligible_positions: List[str] = Field(default_factory=list)
+    percent_owned: Optional[float] = None
+    status: Optional[str] = None
+    position_type: Optional[str] = None
+
+
+class RosterAnalysisResponse(BaseModel):
+    team_key: str
+    roster: List[Player]
+    waiver_recommendations: Dict[str, List[AvailablePlayer]]
+
+
+class FreeAgentsResponse(BaseModel):
+    team_key: str
+    positions: List[str]
+    free_agents: Dict[str, List[AvailablePlayer]]
 
 
 # Waivers

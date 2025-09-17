@@ -50,7 +50,7 @@ paths:
           $ref: '#/components/responses/RateLimited'
   /v1/roster:
     get:
-      summary: Get current or week-specific roster
+      summary: Get current roster
       operationId: getRoster
       parameters:
         - in: query
@@ -59,10 +59,6 @@ paths:
           schema:
             type: string
             pattern: '^[0-9]+\.l\.[0-9]+\.t\.[0-9]+$'
-        - in: query
-          name: week
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 18 }
       responses:
         '200':
           description: Roster
@@ -70,6 +66,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RosterResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/roster/analysis:
+    get:
+      summary: Roster plus waiver recommendations
+      operationId: getRosterAnalysis
+      parameters:
+        - in: query
+          name: team_key
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]+\.l\.[0-9]+\.t\.[0-9]+$'
+      responses:
+        '200':
+          description: Roster analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterAnalysisResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/free-agents:
+    get:
+      summary: Free agents filtered by position
+      operationId: getFreeAgents
+      parameters:
+        - in: query
+          name: team_key
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]+\.l\.[0-9]+\.t\.[0-9]+$'
+        - in: query
+          name: positions
+          required: false
+          description: Repeat to specify multiple positions (e.g. QB, WR)
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+          description: Number of players to return per position (default 5)
+      responses:
+        '200':
+          description: Free agents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeAgentsResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -245,21 +307,65 @@ components:
                   required: [team_key, team_name]
             required: [league_id, league_key, teams]
       required: [leagues]
+    RosterPlayer:
+      type: object
+      properties:
+        name: { type: string }
+        position: { type: string, nullable: true }
+        slot: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        eligible_positions:
+          type: array
+          items: { type: string }
+        player_id: { type: integer, nullable: true }
+        position_type: { type: string, nullable: true }
+      required: [name]
+    AvailablePlayer:
+      type: object
+      properties:
+        player_id: { type: integer, nullable: true }
+        name: { type: string }
+        eligible_positions:
+          type: array
+          items: { type: string }
+        percent_owned: { type: number, nullable: true }
+        status: { type: string, nullable: true }
+        position_type: { type: string, nullable: true }
+      required: [name]
     RosterResponse:
       type: object
       properties:
         team_key: { type: string }
-        week: { type: integer, nullable: true }
         players:
           type: array
-          items:
-            type: object
-            properties:
-              name: { type: string }
-              position: { type: string, nullable: true }
-              status: { type: string, nullable: true }
-            required: [name]
+          items: { $ref: '#/components/schemas/RosterPlayer' }
       required: [team_key, players]
+    RosterAnalysisResponse:
+      type: object
+      properties:
+        team_key: { type: string }
+        roster:
+          type: array
+          items: { $ref: '#/components/schemas/RosterPlayer' }
+        waiver_recommendations:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/AvailablePlayer' }
+      required: [team_key, roster, waiver_recommendations]
+    FreeAgentsResponse:
+      type: object
+      properties:
+        team_key: { type: string }
+        positions:
+          type: array
+          items: { type: string }
+        free_agents:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/AvailablePlayer' }
+      required: [team_key, positions, free_agents]
     WaiversResponse:
       type: object
       properties:

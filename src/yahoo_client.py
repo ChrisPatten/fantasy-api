@@ -30,6 +30,16 @@ def _to_int_or_none(value: Any) -> Optional[int]:
     except (TypeError, ValueError):
         return None
 
+
+def _to_float_or_none(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 log = logging.getLogger(__name__)
 
 
@@ -324,21 +334,138 @@ def enrich_favorites(settings: Settings, favorites: List[Dict[str, Any]]) -> Lis
     return enriched
 
 
-def get_roster(settings: Settings, team_key: str, week: Optional[int]) -> Dict[str, Any]:
+def get_roster(settings: Settings, team_key: str) -> Dict[str, Any]:
     oauth = _get_oauth(settings)
     if yfa is None:
         raise RuntimeError("yahoo_fantasy_api not available")
     tm = yfa.Team(oauth, team_key)
-    roster = tm.roster(week=week) if week else tm.roster()
+    roster = tm.roster()
     players = []
     for p in roster:
-        name = p.get("name") or p.get("full") or p.get("full_name") or p.get("display_position") or ""
+        eligible_positions = p.get("eligible_positions") or []
+        slot = p.get("selected_position") or None
+        status = p.get("status") or None
+        if isinstance(status, str) and not status.strip():
+            status = None
+        position = eligible_positions[0] if eligible_positions else None
+        name = (
+            p.get("name")
+            or p.get("full")
+            or p.get("full_name")
+            or p.get("display_position")
+            or ""
+        )
         players.append({
             "name": name,
-            "position": p.get("position") or p.get("selected_position") or None,
-            "status": p.get("status") or None,
+            "position": position,
+            "slot": slot,
+            "status": status,
+            "eligible_positions": eligible_positions,
+            "player_id": _to_int_or_none(p.get("player_id")),
+            "position_type": p.get("position_type"),
         })
-    return {"team_key": team_key, "week": week, "players": players}
+    return {"team_key": team_key, "players": players}
+
+
+def _derive_league_key(team_key: str) -> str:
+    if ".t." not in team_key:
+        raise YahooOAuthError("Unable to derive league key from team key", status_code=400)
+    return team_key.split(".t.")[0]
+
+
+def _top_free_agents(
+    settings: Settings,
+    *,
+    league_key: str,
+    positions: List[str],
+    per_position: int,
+) -> Dict[str, List[Dict[str, Any]]]:
+    oauth = _get_oauth(settings)
+    if yfa is None:
+        raise RuntimeError("yahoo_fantasy_api not available")
+    league = yfa.League(oauth, league_key)
+    recommendations: Dict[str, List[Dict[str, Any]]] = {}
+    for pos in positions:
+        try:
+            free_agents = league.free_agents(pos)
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            log.warning("analysis.free_agents_failed", position=pos, error=str(exc))
+            recommendations[pos] = []
+            continue
+        top_players: List[Dict[str, Any]] = []
+        for agent in free_agents:
+            eligible_positions = agent.get("eligible_positions") or []
+            status = agent.get("status") or None
+            if isinstance(status, str) and not status.strip():
+                status = None
+            player_entry = {
+                "player_id": _to_int_or_none(agent.get("player_id")),
+                "name": agent.get("name") or "",
+                "eligible_positions": eligible_positions,
+                "percent_owned": _to_float_or_none(agent.get("percent_owned")),
+                "status": status,
+                "position_type": agent.get("position_type"),
+            }
+            top_players.append(player_entry)
+            if len(top_players) >= per_position:
+                break
+        recommendations[pos] = top_players
+    return recommendations
+
+
+ANALYSIS_POSITIONS = ["QB", "WR", "RB", "TE"]
+
+
+def get_roster_analysis(
+    settings: Settings,
+    team_key: str,
+    *,
+    positions: Optional[List[str]] = None,
+    per_position: int = 5,
+) -> Dict[str, Any]:
+    roster = get_roster(settings, team_key)
+    league_key = _derive_league_key(team_key)
+    pos_list = positions or ANALYSIS_POSITIONS
+    recommendations = _top_free_agents(
+        settings,
+        league_key=league_key,
+        positions=pos_list,
+        per_position=per_position,
+    )
+    return {
+        "team_key": team_key,
+        "roster": roster["players"],
+        "waiver_recommendations": recommendations,
+    }
+
+
+def get_free_agents(
+    settings: Settings,
+    team_key: str,
+    *,
+    positions: Optional[List[str]] = None,
+    per_position: int = 25,
+) -> Dict[str, Any]:
+    league_key = _derive_league_key(team_key)
+    pos_list = positions or ANALYSIS_POSITIONS
+    normalized: List[str] = []
+    for pos in pos_list:
+        if not pos:
+            continue
+        normalized.append(pos.upper())
+    if not normalized:
+        raise YahooOAuthError("At least one position is required", status_code=400)
+    agents = _top_free_agents(
+        settings,
+        league_key=league_key,
+        positions=normalized,
+        per_position=per_position,
+    )
+    return {
+        "team_key": team_key,
+        "positions": normalized,
+        "free_agents": agents,
+    }
 
 
 def _parse_waiver_transactions(data: Dict[str, Any]) -> List[Dict[str, Any]]:

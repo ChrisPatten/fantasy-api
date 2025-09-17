@@ -29,13 +29,28 @@ def client(settings: Settings, monkeypatch):
             }
         ]
 
-    def fake_roster(settings, team_key, week):
+    def fake_roster(settings, team_key):
         return {
             "team_key": team_key,
-            "week": week,
             "players": [
-                {"name": "Player A", "position": "QB", "status": None},
-                {"name": "Player B", "position": "RB", "status": "Q"},
+                {
+                    "name": "Player A",
+                    "position": "QB",
+                    "slot": "QB",
+                    "status": None,
+                    "eligible_positions": ["QB"],
+                    "player_id": 1,
+                    "position_type": "O",
+                },
+                {
+                    "name": "Player B",
+                    "position": "RB",
+                    "slot": "BN",
+                    "status": "Q",
+                    "eligible_positions": ["RB"],
+                    "player_id": 2,
+                    "position_type": "O",
+                },
             ],
         }
 
@@ -68,11 +83,75 @@ def client(settings: Settings, monkeypatch):
             "expires_at": "2024-01-01T00:00:00+00:00",
         }
 
+    def fake_roster_analysis(settings, team_key, positions=None, per_position=5):
+        roster = fake_roster(settings, team_key)
+        recs = {
+            "QB": [
+                {
+                    "player_id": 1001,
+                    "name": "Free QB",
+                    "eligible_positions": ["QB"],
+                    "percent_owned": 12.5,
+                    "status": None,
+                    "position_type": "O",
+                }
+            ],
+            "WR": [
+                {
+                    "player_id": 1002,
+                    "name": "Free WR",
+                    "eligible_positions": ["WR"],
+                    "percent_owned": 24.0,
+                    "status": None,
+                    "position_type": "O",
+                }
+            ],
+            "RB": [
+                {
+                    "player_id": 1003,
+                    "name": "Free RB",
+                    "eligible_positions": ["RB"],
+                    "percent_owned": 31.0,
+                    "status": "P",
+                    "position_type": "O",
+                }
+            ],
+            "TE": [
+                {
+                    "player_id": 1004,
+                    "name": "Free TE",
+                    "eligible_positions": ["TE"],
+                    "percent_owned": 8.5,
+                    "status": None,
+                    "position_type": "O",
+                }
+            ],
+        }
+        return {"team_key": team_key, "roster": roster["players"], "waiver_recommendations": recs}
+
+    def fake_free_agents(settings, team_key, positions=None, per_position=25):
+        normalized = [p.upper() for p in (positions or ["QB", "RB"]) if p]
+        agents = {}
+        for idx, pos in enumerate(normalized, start=1):
+            agents[pos] = [
+                {
+                    "player_id": 2000 + idx,
+                    "name": f"Free {pos} {idx}",
+                    "eligible_positions": [pos],
+                    "percent_owned": 10.0 * idx,
+                    "status": None,
+                    "position_type": "O",
+                }
+            ]
+        return {"team_key": team_key, "positions": normalized, "free_agents": agents}
+
     monkeypatch.setattr(yahoo_client, "list_teams", fake_list)
     monkeypatch.setattr(yahoo_client, "get_roster", fake_roster)
     monkeypatch.setattr(yahoo_client, "get_waivers", fake_waivers)
     monkeypatch.setattr(yahoo_client, "build_authorization_url", fake_build_auth_url)
     monkeypatch.setattr(yahoo_client, "exchange_authorization_code", fake_exchange_auth_code)
+    monkeypatch.setattr(yahoo_client, "get_roster_analysis", fake_roster_analysis)
+    monkeypatch.setattr(yahoo_client, "get_free_agents", fake_free_agents)
 
     app = create_app(settings)
     return TestClient(app)
