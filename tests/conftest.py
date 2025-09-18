@@ -21,13 +21,19 @@ def client(settings: Settings, monkeypatch):
             {
                 "league_id": "12345",
                 "league_key": "423.l.12345",
-                "league_name": "League 12345",
                 "teams": [
                     {"team_key": "423.l.12345.t.1", "team_name": "Team One", "waiver_priority": 3},
                     {"team_key": "423.l.12345.t.7", "team_name": "Team Seven", "waiver_priority": 1},
                 ],
             }
         ]
+
+    def fake_league_settings(settings, league_key):
+        return {
+            "league_key": league_key,
+            "name": "League 12345",
+            "scoring_type": "headpoints",
+        }
 
     def fake_roster(settings, team_key):
         return {
@@ -83,52 +89,6 @@ def client(settings: Settings, monkeypatch):
             "expires_at": "2024-01-01T00:00:00+00:00",
         }
 
-    def fake_roster_analysis(settings, team_key, positions=None, per_position=5):
-        roster = fake_roster(settings, team_key)
-        recs = {
-            "QB": [
-                {
-                    "player_id": 1001,
-                    "name": "Free QB",
-                    "eligible_positions": ["QB"],
-                    "percent_owned": 12.5,
-                    "status": None,
-                    "position_type": "O",
-                }
-            ],
-            "WR": [
-                {
-                    "player_id": 1002,
-                    "name": "Free WR",
-                    "eligible_positions": ["WR"],
-                    "percent_owned": 24.0,
-                    "status": None,
-                    "position_type": "O",
-                }
-            ],
-            "RB": [
-                {
-                    "player_id": 1003,
-                    "name": "Free RB",
-                    "eligible_positions": ["RB"],
-                    "percent_owned": 31.0,
-                    "status": "P",
-                    "position_type": "O",
-                }
-            ],
-            "TE": [
-                {
-                    "player_id": 1004,
-                    "name": "Free TE",
-                    "eligible_positions": ["TE"],
-                    "percent_owned": 8.5,
-                    "status": None,
-                    "position_type": "O",
-                }
-            ],
-        }
-        return {"team_key": team_key, "roster": roster["players"], "waiver_recommendations": recs}
-
     def fake_free_agents(settings, team_key, positions=None, per_position=25):
         normalized = [p.upper() for p in (positions or ["QB", "RB"]) if p]
         agents = {}
@@ -147,10 +107,10 @@ def client(settings: Settings, monkeypatch):
 
     monkeypatch.setattr(yahoo_client, "list_teams", fake_list)
     monkeypatch.setattr(yahoo_client, "get_roster", fake_roster)
+    monkeypatch.setattr(yahoo_client, "get_league_settings", fake_league_settings)
     monkeypatch.setattr(yahoo_client, "get_waivers", fake_waivers)
     monkeypatch.setattr(yahoo_client, "build_authorization_url", fake_build_auth_url)
     monkeypatch.setattr(yahoo_client, "exchange_authorization_code", fake_exchange_auth_code)
-    monkeypatch.setattr(yahoo_client, "get_roster_analysis", fake_roster_analysis)
     monkeypatch.setattr(yahoo_client, "get_free_agents", fake_free_agents)
 
     app = create_app(settings)

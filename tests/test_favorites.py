@@ -11,11 +11,36 @@ def test_favorites_enriched_with_names(client, settings):
     assert payload == {
         "favorites": [
             {
-                "league_key": "423.l.12345",
                 "team_key": "423.l.12345.t.7",
-                "alias": "My Team",
                 "team_name": "Team Seven",
-                "league_name": "League 12345",
+                "roster": {
+                    "team_key": "423.l.12345.t.7",
+                    "players": [
+                        {
+                            "name": "Player A",
+                            "position": "QB",
+                            "slot": "QB",
+                            "status": None,
+                            "eligible_positions": ["QB"],
+                            "player_id": 1,
+                            "position_type": "O",
+                        },
+                        {
+                            "name": "Player B",
+                            "position": "RB",
+                            "slot": "BN",
+                            "status": "Q",
+                            "eligible_positions": ["RB"],
+                            "player_id": 2,
+                            "position_type": "O",
+                        },
+                    ],
+                },
+                "league_settings": {
+                    "league_key": "423.l.12345",
+                    "name": "League 12345",
+                    "scoring_type": "headpoints",
+                },
             }
         ]
     }

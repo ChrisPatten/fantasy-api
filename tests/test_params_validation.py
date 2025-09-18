@@ -19,27 +19,6 @@ def test_roster_happy_path(client):
     assert data["players"][0]["slot"] == "QB"
 
 
-def test_roster_analysis_requires_team_key(client):
-    r = client.get("/v1/roster/analysis", headers={"X-API-Key": "test-key"})
-    assert r.status_code == 422
-    body = r.json()
-    assert body["code"] == "validation_error"
-
-
-def test_roster_analysis_team_key_pattern(client):
-    r = client.get("/v1/roster/analysis?team_key=bad-format", headers={"X-API-Key": "test-key"})
-    assert r.status_code == 422
-
-
-def test_roster_analysis_happy_path(client):
-    r = client.get("/v1/roster/analysis?team_key=423.l.12345.t.7", headers={"X-API-Key": "test-key"})
-    assert r.status_code == 200
-    data = r.json()
-    assert data["team_key"] == "423.l.12345.t.7"
-    assert "waiver_recommendations" in data
-    assert set(data["waiver_recommendations"].keys()) == {"QB", "WR", "RB", "TE"}
-
-
 def test_free_agents_requires_team_key(client):
     r = client.get("/v1/free-agents", headers={"X-API-Key": "test-key"})
     assert r.status_code == 422

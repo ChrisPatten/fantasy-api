@@ -21,7 +21,6 @@ from .models import (
     FavoriteTeam,
     FavoritesResponse,
     Health,
-    RosterAnalysisResponse,
     RosterResponse,
     TeamsResponse,
     WaiversResponse,
@@ -142,16 +141,6 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     )
     async def get_roster(team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$")):
         result = yahoo_client.get_roster(settings, team_key)
-        return result
-
-    @app.get(
-        "/v1/roster/analysis",
-        response_model=RosterAnalysisResponse,
-        dependencies=[Depends(rate_limiter), Depends(api_key_dep)],
-        operation_id="getRosterAnalysis",
-    )
-    async def get_roster_analysis(team_key: str = Query(..., pattern=r"^\d+\.l\.\d+\.t\.\d+$")):
-        result = yahoo_client.get_roster_analysis(settings, team_key)
         return result
 
     @app.get(

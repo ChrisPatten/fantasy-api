@@ -72,30 +72,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-  /v1/roster/analysis:
-    get:
-      summary: Roster plus waiver recommendations
-      operationId: getRosterAnalysis
-      parameters:
-        - in: query
-          name: team_key
-          required: true
-          schema:
-            type: string
-            pattern: '^[0-9]+\.l\.[0-9]+\.t\.[0-9]+$'
-      responses:
-        '200':
-          description: Roster analysis
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RosterAnalysisResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '429':
-          $ref: '#/components/responses/RateLimited'
   /v1/free-agents:
     get:
       summary: Free agents filtered by position
@@ -295,7 +271,6 @@ components:
             properties:
               league_id: { type: string }
               league_key: { type: string }
-              league_name: { type: string, nullable: true }
               teams:
                 type: array
                 items:
@@ -340,19 +315,6 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RosterPlayer' }
       required: [team_key, players]
-    RosterAnalysisResponse:
-      type: object
-      properties:
-        team_key: { type: string }
-        roster:
-          type: array
-          items: { $ref: '#/components/schemas/RosterPlayer' }
-        waiver_recommendations:
-          type: object
-          additionalProperties:
-            type: array
-            items: { $ref: '#/components/schemas/AvailablePlayer' }
-      required: [team_key, roster, waiver_recommendations]
     FreeAgentsResponse:
       type: object
       properties:
@@ -400,15 +362,13 @@ components:
     FavoriteTeam:
       type: object
       properties:
-        league_key: { type: string, nullable: true }
         team_key: { type: string }
-        alias:
-          type: string
-          nullable: true
-          description: "Optional alias derived from the configured FAVORITE_TEAMS entries (defaults to `fav{index}`)"
-        team_name: { type: string, nullable: true }
-        league_name: { type: string, nullable: true }
-      required: [team_key]
+        team_name: { type: string }
+        roster:
+          $ref: '#/components/schemas/RosterResponse'
+        league_settings:
+          type: object
+      required: [team_key, team_name, roster, league_settings]
     FavoritesResponse:
       type: object
       properties:

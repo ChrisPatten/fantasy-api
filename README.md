@@ -100,3 +100,5 @@ When integrating assistants (e.g., ChatGPT Actions), always start the conversati
 Notes
 - Extra env vars are ignored, so you can safely reuse your project `.env` files.
 - On Apple Silicon under Colima, images build for `linux/arm64` by default. Use `--platform linux/amd64` if you must run x86 images.
+- If `corp-bundle.pem` exists in the repo root it is mounted automatically and exposed via `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` for `make docker-run` and `make docker-dev`.
+- Pass additional env vars at runtime with standard make overrides, e.g. `FAVORITE_TEAMS="KC,BUF" make docker-dev`.

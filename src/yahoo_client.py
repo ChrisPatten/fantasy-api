@@ -265,14 +265,6 @@ def list_teams(settings: Settings, season: Optional[int]) -> List[Dict[str, Any]
         lg = yfa.League(oauth, lid)
         meta = lg.league_settings() if hasattr(lg, "league_settings") else {"league_key": lid}
         league_key = meta.get("league_key", lid)
-        league_name = meta.get("name") or meta.get("league_name")
-        if not league_name and hasattr(lg, "metadata"):
-            try:
-                metadata = lg.metadata()
-                if isinstance(metadata, dict):
-                    league_name = metadata.get("name") or metadata.get("league_name")
-            except Exception:
-                league_name = None
         teams_raw = lg.teams()
         teams_list: List[Dict[str, Any]] = []
         # teams() returns dict keyed by team_key
@@ -285,7 +277,6 @@ def list_teams(settings: Settings, season: Optional[int]) -> List[Dict[str, Any]
         leagues.append({
             "league_id": str(lid),
             "league_key": str(league_key),
-            "league_name": league_name if league_name else None,
             "teams": teams_list,
         })
     return leagues
@@ -298,39 +289,57 @@ def enrich_favorites(settings: Settings, favorites: List[Dict[str, Any]]) -> Lis
         leagues = list_teams(settings, season=None)
     except Exception as exc:  # pragma: no cover - defensive logging path
         log.warning("favorites.enrichment_failed", error=str(exc))
-        return favorites
+        leagues = []
 
-    league_lookup: Dict[str, Dict[str, Any]] = {}
     team_lookup: Dict[str, Dict[str, Any]] = {}
     for league in leagues:
-        league_key = str(league.get("league_key")) if league.get("league_key") is not None else ""
-        league_lookup[league_key] = {
-            "league_key": league_key,
-            "league_name": league.get("league_name"),
-        }
         for team in league.get("teams", []):
             team_key = team.get("team_key")
             if not team_key:
                 continue
             team_lookup[str(team_key)] = {
-                "league_key": league_key,
-                "league_name": league.get("league_name"),
-                "team_name": team.get("team_name"),
+                "team_name": team.get("team_name") or "",
             }
 
     enriched: List[Dict[str, Any]] = []
+    league_settings_cache: Dict[str, Dict[str, Any]] = {}
     for fav in favorites:
         entry = dict(fav)
-        info = team_lookup.get(entry.get("team_key"))
-        if info:
-            entry.setdefault("league_key", info.get("league_key"))
-            entry["team_name"] = info.get("team_name")
-            entry["league_name"] = info.get("league_name")
-        elif entry.get("league_key"):
-            league_info = league_lookup.get(str(entry["league_key"]))
-            if league_info:
-                entry["league_name"] = league_info.get("league_name")
-        enriched.append(entry)
+        team_key = str(entry.get("team_key") or "").strip()
+        if not team_key:
+            log.warning("favorites.missing_team_key", favorite=fav)
+            continue
+        info = team_lookup.get(team_key, {})
+        team_name = info.get("team_name") or entry.get("team_name") or entry.get("alias") or team_key
+        league_key = str(entry.get("league_key") or "").strip()
+        if not league_key:
+            try:
+                league_key = _derive_league_key(team_key)
+            except YahooOAuthError as exc:
+                log.warning("favorites.league_key_derive_failed", team_key=team_key, error=str(exc))
+                league_key = ""
+        league_settings: Dict[str, Any] = {}
+        if league_key:
+            if league_key not in league_settings_cache:
+                try:
+                    league_settings_cache[league_key] = get_league_settings(settings, league_key)
+                except Exception as exc:  # pragma: no cover - defensive logging path
+                    log.warning("favorites.league_settings_failed", league_key=league_key, error=str(exc))
+                    league_settings_cache[league_key] = {}
+            league_settings = league_settings_cache.get(league_key, {})
+        try:
+            roster = get_roster(settings, team_key)
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            log.warning("favorites.roster_failed", team_key=team_key, error=str(exc))
+            roster = {"team_key": team_key, "players": []}
+        enriched.append(
+            {
+                "team_key": team_key,
+                "team_name": team_name,
+                "roster": roster,
+                "league_settings": league_settings,
+            }
+        )
     return enriched
 
 
@@ -365,6 +374,17 @@ def get_roster(settings: Settings, team_key: str) -> Dict[str, Any]:
             "position_type": p.get("position_type"),
         })
     return {"team_key": team_key, "players": players}
+
+
+def get_league_settings(settings: Settings, league_key: str) -> Dict[str, Any]:
+    oauth = _get_oauth(settings)
+    if yfa is None:
+        raise RuntimeError("yahoo_fantasy_api not available")
+    league = yfa.League(oauth, league_key)
+    data = league.settings()
+    if not isinstance(data, dict):
+        return {"league_key": league_key, "settings": data}
+    return data
 
 
 def _derive_league_key(team_key: str) -> str:
@@ -414,29 +434,6 @@ def _top_free_agents(
 
 
 ANALYSIS_POSITIONS = ["QB", "WR", "RB", "TE"]
-
-
-def get_roster_analysis(
-    settings: Settings,
-    team_key: str,
-    *,
-    positions: Optional[List[str]] = None,
-    per_position: int = 5,
-) -> Dict[str, Any]:
-    roster = get_roster(settings, team_key)
-    league_key = _derive_league_key(team_key)
-    pos_list = positions or ANALYSIS_POSITIONS
-    recommendations = _top_free_agents(
-        settings,
-        league_key=league_key,
-        positions=pos_list,
-        per_position=per_position,
-    )
-    return {
-        "team_key": team_key,
-        "roster": roster["players"],
-        "waiver_recommendations": recommendations,
-    }
 
 
 def get_free_agents(
