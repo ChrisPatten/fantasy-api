@@ -27,6 +27,18 @@ paths:
               examples:
                 ok:
                   value: { status: 'ok' }
+  /privacy-policy:
+    get:
+      summary: Privacy policy
+      operationId: getPrivacyPolicy
+      security: []
+      responses:
+        '200':
+          description: Privacy policy HTML page
+          content:
+            text/html:
+              schema:
+                type: string
   /v1/teams:
     get:
       summary: List leagues and teams
@@ -367,8 +379,10 @@ components:
         roster:
           $ref: '#/components/schemas/RosterResponse'
         league_settings:
-          type: object
-      required: [team_key, team_name, roster, league_settings]
+          allOf:
+            - $ref: '#/components/schemas/LeagueSettings'
+          nullable: true
+      required: [team_key, team_name, roster]
     FavoritesResponse:
       type: object
       properties:
@@ -377,6 +391,30 @@ components:
           items:
             $ref: '#/components/schemas/FavoriteTeam'
       required: [favorites]
+    LeagueSettings:
+      type: object
+      properties:
+        league_key: { type: string }
+        league_id: { type: string }
+        name: { type: string }
+        url: { type: string, format: uri, nullable: true }
+        logo_url: { type: string, format: uri, nullable: true }
+        draft_status: { type: string, nullable: true }
+        num_teams: { type: integer, nullable: true }
+        current_week: { type: integer, nullable: true }
+        start_week: { type: integer, nullable: true }
+        start_date: { type: string, format: date, nullable: true }
+        end_week: { type: integer, nullable: true }
+        end_date: { type: string, format: date, nullable: true }
+        season: { type: integer, nullable: true }
+        persistent_url: { type: string, format: uri, nullable: true }
+        playoff_start_week: { type: integer, nullable: true }
+        num_playoff_teams: { type: integer, nullable: true }
+        num_playoff_consolation_teams: { type: integer, nullable: true }
+        trade_end_date: { type: string, format: date, nullable: true }
+        max_weekly_adds: { type: integer, nullable: true }
+        scoring_type: { type: string, nullable: true }
+      required: [league_key, league_id, name]
     AuthUrlResponse:
       type: object
       properties:

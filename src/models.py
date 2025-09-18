@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
@@ -16,12 +16,36 @@ class Error(BaseModel):
 class Health(BaseModel):
     status: str = "ok"
 
+class LeagueSettings(BaseModel):
+    """Structured representation of Yahoo league metadata."""
+
+    league_key: str
+    league_id: str
+    name: str
+    url: Optional[AnyHttpUrl] = None
+    logo_url: Optional[AnyHttpUrl] = None
+    draft_status: Optional[str] = None
+    num_teams: Optional[int] = None
+    current_week: Optional[int] = None
+    start_week: Optional[int] = None
+    start_date: Optional[date] = None
+    end_week: Optional[int] = None
+    end_date: Optional[date] = None
+    season: Optional[int] = None
+    persistent_url: Optional[AnyHttpUrl] = None
+    playoff_start_week: Optional[int] = None
+    num_playoff_teams: Optional[int] = None
+    num_playoff_consolation_teams: Optional[int] = None
+    trade_end_date: Optional[date] = None
+    max_weekly_adds: Optional[int] = None
+    scoring_type: Optional[str] = None
+
 
 class FavoriteTeam(BaseModel):
     team_key: str
     team_name: str
     roster: RosterResponse
-    league_settings: Dict[str, Any]
+    league_settings: Optional[LeagueSettings] = None
 
 
 class FavoritesResponse(BaseModel):

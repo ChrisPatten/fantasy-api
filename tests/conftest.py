@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app import create_app
+from src.models import LeagueSettings
 from src.settings import Settings
 
 
@@ -29,11 +30,12 @@ def client(settings: Settings, monkeypatch):
         ]
 
     def fake_league_settings(settings, league_key):
-        return {
-            "league_key": league_key,
-            "name": "League 12345",
-            "scoring_type": "headpoints",
-        }
+        return LeagueSettings(
+            league_key=league_key,
+            league_id="12345",
+            name="League 12345",
+            scoring_type="headpoints",
+        )
 
     def fake_roster(settings, team_key):
         return {

@@ -19,6 +19,7 @@ try:
 except Exception:  # pragma: no cover - library not available during some test runs
     yfa = None  # type: ignore
 
+from .models import LeagueSettings
 from .settings import Settings
 
 
@@ -302,7 +303,7 @@ def enrich_favorites(settings: Settings, favorites: List[Dict[str, Any]]) -> Lis
             }
 
     enriched: List[Dict[str, Any]] = []
-    league_settings_cache: Dict[str, Dict[str, Any]] = {}
+    league_settings_cache: Dict[str, LeagueSettings] = {}
     for fav in favorites:
         entry = dict(fav)
         team_key = str(entry.get("team_key") or "").strip()
@@ -318,15 +319,15 @@ def enrich_favorites(settings: Settings, favorites: List[Dict[str, Any]]) -> Lis
             except YahooOAuthError as exc:
                 log.warning("favorites.league_key_derive_failed", team_key=team_key, error=str(exc))
                 league_key = ""
-        league_settings: Dict[str, Any] = {}
+        league_settings: Optional[LeagueSettings] = None
         if league_key:
             if league_key not in league_settings_cache:
                 try:
                     league_settings_cache[league_key] = get_league_settings(settings, league_key)
                 except Exception as exc:  # pragma: no cover - defensive logging path
                     log.warning("favorites.league_settings_failed", league_key=league_key, error=str(exc))
-                    league_settings_cache[league_key] = {}
-            league_settings = league_settings_cache.get(league_key, {})
+                    league_settings_cache[league_key] = _fallback_league_settings(league_key)
+            league_settings = league_settings_cache.get(league_key)
         try:
             roster = get_roster(settings, team_key)
         except Exception as exc:  # pragma: no cover - defensive logging path
@@ -376,21 +377,51 @@ def get_roster(settings: Settings, team_key: str) -> Dict[str, Any]:
     return {"team_key": team_key, "players": players}
 
 
-def get_league_settings(settings: Settings, league_key: str) -> Dict[str, Any]:
+def get_league_settings(settings: Settings, league_key: str) -> LeagueSettings:
     oauth = _get_oauth(settings)
     if yfa is None:
         raise RuntimeError("yahoo_fantasy_api not available")
     league = yfa.League(oauth, league_key)
     data = league.settings()
-    if not isinstance(data, dict):
-        return {"league_key": league_key, "settings": data}
-    return data
+    payload: Dict[str, Any]
+    if isinstance(data, dict):
+        payload = dict(data)
+    else:
+        payload = {"league_key": league_key}
+    payload.setdefault("league_key", league_key)
+    payload.setdefault("league_id", _derive_league_id(league_key))
+    payload.setdefault("name", payload.get("name") or league_key)
+    try:
+        return LeagueSettings.model_validate(payload)
+    except Exception as exc:
+        log.warning(
+            "league.settings_parse_failed",
+            league_key=league_key,
+            error=str(exc),
+        )
+        return _fallback_league_settings(league_key)
+
+
+def _fallback_league_settings(league_key: str) -> LeagueSettings:
+    return LeagueSettings.model_validate(
+        {
+            "league_key": league_key,
+            "league_id": _derive_league_id(league_key),
+            "name": league_key,
+        }
+    )
 
 
 def _derive_league_key(team_key: str) -> str:
     if ".t." not in team_key:
         raise YahooOAuthError("Unable to derive league key from team key", status_code=400)
     return team_key.split(".t.")[0]
+
+
+def _derive_league_id(league_key: str) -> str:
+    if ".l." in league_key:
+        return league_key.split(".l.")[-1]
+    return league_key
 
 
 def _top_free_agents(

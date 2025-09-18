@@ -9,7 +9,7 @@ import structlog
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import yahoo_client
 from .deps import APIKeyChecker, RateLimiter, get_api_key_checker, get_rate_limiter, request_id_generator
@@ -27,6 +27,30 @@ from .models import (
     FreeAgentsResponse,
 )
 from .settings import Settings, get_settings
+
+
+PRIVACY_POLICY_HTML = """<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+    <meta charset=\"utf-8\" />
+    <title>Fantasy NFL API Privacy Policy</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1f2933; }
+        h1 { font-size: 1.75rem; margin-bottom: 1rem; }
+        p { margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy</h1>
+    <p><strong>Data Sources.</strong> The app connects to Yahoo Fantasy NFL with your authorization and retrieves only league, team, roster, matchup, and scoring data needed for your request.</p>
+    <p><strong>Authentication.</strong> Yahoo OAuth tokens are read from /data/oauth2.json at runtime and are not persisted elsewhere by the service; refresh tokens remain controlled by Yahoo.</p>
+    <p><strong>User Input.</strong> Requests may include query parameters or payloads you provide; the service does not collect additional personal data.</p>
+    <p><strong>Logging.</strong> Application logs capture request timestamps, resource paths, response codes, and operational errors. Logs may transiently record OAuth errors, rate-limit responses, or validation failures, but never include Yahoo access tokens or roster contents.</p>
+    <p><strong>Retention.</strong> Logs follow infrastructure retention policies and remain only as long as needed for debugging and performance monitoring. No analytics profiles or third-party tracking is performed.</p>
+    <p><strong>Disclosure.</strong> Data is not shared with external parties except when required to operate the Yahoo Fantasy integrations or comply with legal obligations.</p>
+    <p><strong>Security.</strong> Access to the application and logs is restricted to authorized operators who use API keys and infrastructure-level controls.</p>
+</body>
+</html>"""
 
 
 def _configure_logging(level: str) -> None:
@@ -110,6 +134,18 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             "git_sha": os.environ.get("GIT_SHA", "dev"),
             "build_time": os.environ.get("BUILD_TIME", "dev"),
         }
+
+    @app.get(
+        "/privacy-policy",
+        response_class=HTMLResponse,
+        operation_id="getPrivacyPolicy",
+        tags=["public"],
+        summary="Privacy policy",
+    )
+    async def privacy_policy() -> HTMLResponse:
+        """Serve the static privacy policy as a simple HTML page."""
+
+        return HTMLResponse(content=PRIVACY_POLICY_HTML)
 
     try:
         from starlette_exporter import PrometheusMiddleware, handle_metrics
